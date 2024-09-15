@@ -1,89 +1,89 @@
 let loginTabId = null;
-let instructTabId = null;
 
-chrome.action.onClicked.addListener(() => {
-  // Open the login page in a new tab and track its ID
-  chrome.tabs.create(
-    { url: "http://172.16.0.30:8090/httpclient.html" },
-    (loginTab) => {
-      loginTabId = loginTab.id;
+function getRandomPassword(passwords) {
+  return passwords[Math.floor(Math.random() * passwords.length)];
+}
 
-      // Function to check if the desired URL is opened
-      function checkNewTabs(tabId) {
-        chrome.tabs.get(tabId, (tab) => {
-          if (tab.url === "http://172.16.100.117/Instruct2024.php") {
-            instructTabId = tabId;
-            // Close both tabs
-            chrome.tabs.remove(loginTabId, () => {
-              console.log(
-                "Login tab closed because the desired page was opened"
-              );
-            });
-            chrome.tabs.remove(instructTabId, () => {
-              console.log("Instruct tab closed");
-            });
+// Check internet connectivity by pinging an IP (like a DNS server or college portal)
+function checkInternetConnectivity() {
+  fetch("http://1.1.1.1", { mode: 'no-cors' }) // Use 'no-cors' to avoid CORS issues
+    .then((response) => {
+      console.log('Internet is connected');
+    })
+    .catch((error) => {
+      console.log('No internet connection, attempting to log in...');
+      attemptLogin();
+    });
+}
+
+// Perform the login process
+function attemptLogin() {
+  chrome.storage.local.get(["usernames", "passwords"], (result) => {
+    const usernames = result.usernames || [];
+    const passwords = result.passwords || [];
+
+    if (usernames.length === 0 || passwords.length === 0) {
+      console.error('No stored credentials');
+      return;
+    }
+
+    // Choose a random password for login
+    const randomPassword = getRandomPassword(passwords);
+
+    // Open the login page in a new tab
+    chrome.tabs.create(
+      { url: "http://172.16.0.30:8090/httpclient.html" },
+      (loginTab) => {
+        loginTabId = loginTab.id;
+
+        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+          if (tabId === loginTabId && info.status === "complete") {
+            // Randomly select a username for each login attempt
+            const randomUsername = usernames[Math.floor(Math.random() * usernames.length)];
+
+            // Fill in the login form and submit
+            chrome.scripting.executeScript({
+              target: { tabId: loginTabId },
+              func: (username, password) => {
+                const usernameField = document.querySelector("#username");
+                const passwordField = document.querySelector("#password");
+                if (usernameField && passwordField) {
+                  usernameField.value = username;
+                  passwordField.value = password;
+
+                  // Create and dispatch an Enter key event on the password field
+                  const event = new KeyboardEvent("keydown", {
+                    key: "Enter",
+                    code: "Enter",
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true,
+                  });
+                  passwordField.dispatchEvent(event);
+                } else {
+                  console.error('Login form fields not found');
+                }
+              },
+              args: [randomUsername, randomPassword]
+            }).catch(err => console.error("Error executing login script:", err));
+
+            chrome.tabs.onUpdated.removeListener(listener);
           }
         });
       }
+    );
+  });
+}
 
-      // Listener to detect when a new tab is created
-      chrome.tabs.onCreated.addListener((newTab) => {
-        checkNewTabs(newTab.id);
-      });
+// Periodically check for internet connectivity (every 5 minutes)
+chrome.alarms.create('checkInternet', { periodInMinutes: 5 });
 
-      // Listener to detect when a tab is updated (which might include URL changes)
-      chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-        if (changeInfo.status === "complete") {
-          checkNewTabs(tabId);
-        }
-      });
-
-      // Wait for the login page to be fully loaded
-      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-        if (tabId === loginTabId && info.status === "complete") {
-          // Retrieve saved credentials from storage
-          chrome.storage.local.get(["username", "password"], (result) => {
-            const username = result.username;
-            const password = result.password;
-
-            // Execute script to fill the login form and submit it
-            chrome.scripting
-              .executeScript({
-                target: { tabId: loginTabId },
-                func: (username, password) => {
-                  const usernameField = document.querySelector(
-                    "#credentials #username"
-                  );
-                  const passwordField = document.querySelector(
-                    "#credentials #password"
-                  );
-                  if (usernameField && passwordField) {
-                    usernameField.value = username;
-                    passwordField.value = password;
-
-                    // Create and dispatch an Enter key event on the password field
-                    const event = new KeyboardEvent("keydown", {
-                      key: "Enter",
-                      code: "Enter",
-                      keyCode: 13,
-                      which: 13,
-                      bubbles: true,
-                      cancelable: true,
-                    });
-                    passwordField.dispatchEvent(event);
-                  } else {
-                    console.error("Username or password field not found");
-                  }
-                },
-                args: [username, password],
-              })
-              .catch((err) => console.error("Error executing script:", err));
-          });
-
-          // Remove the listener after the login process
-          chrome.tabs.onUpdated.removeListener(listener);
-        }
-      });
-    }
-  );
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'checkInternet') {
+    checkInternetConnectivity();
+  }
 });
+
+// Initial check when extension is loaded
+checkInternetConnectivity();
