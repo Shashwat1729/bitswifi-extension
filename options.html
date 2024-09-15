@@ -12,7 +12,7 @@
         display: block;
         margin-bottom: 5px;
       }
-      input {
+      input, textarea {
         width: 100%;
         margin-bottom: 10px;
       }
@@ -24,10 +24,10 @@
   </head>
   <body>
     <h1>Login Settings</h1>
-    <label for="username">Username:</label>
-    <input type="text" id="username" placeholder="Enter your username" />
-    <label for="password">Password:</label>
-    <input type="password" id="password" placeholder="Enter your password" />
+    <label for="usernames">Usernames (comma-separated):</label>
+    <textarea id="usernames" placeholder="Enter multiple usernames"></textarea>
+    <label for="passwords">Passwords (comma-separated):</label>
+    <textarea id="passwords" placeholder="Enter multiple passwords"></textarea>
     <button id="save">Save</button>
     <p id="status"></p>
 
